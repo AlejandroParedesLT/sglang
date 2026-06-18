@@ -898,6 +898,16 @@ class TestPrefillOnlyDisableKvCache(unittest.TestCase):
             ServerArgs(**self._base_kwargs(kv_cache_dtype="fp4_e2m1"))
 
 
+class TestSessionRadixCacheServerArgs(unittest.TestCase):
+    def test_requires_priority_radix_eviction_policy(self):
+        with self.assertRaisesRegex(ValueError, "--radix-eviction-policy priority"):
+            ServerArgs(
+                model_path="dummy",
+                enable_session_radix_cache=True,
+                radix_eviction_policy="lru",
+            )
+
+
 class TestCudaGraphConfigDataclassAccess(CustomTestCase):
     def test_overlap_force_cpu_seq_lens_with_tc_piecewise_prefill(self):
         from sglang.srt.managers.overlap_utils import decide_needs_cpu_seq_lens
