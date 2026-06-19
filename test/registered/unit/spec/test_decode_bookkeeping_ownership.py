@@ -55,15 +55,14 @@ _OWNER_SITES = {
     (_SB, "ScheduleBatch.prepare_for_extend", "kv_allocated_len"): 1,
     ("mem_cache/common.py", "alloc_for_extend", "evict"): 1,
     ("mem_cache/common.py", "alloc_for_decode", "evict"): 1,
-    # spec v2: iter clock + alloc in the scheduler-driven mixin; KV commit settles
-    # entirely in resolve. No worker pre-claims the bonus (it is not in KV yet).
+    # spec v2: iter clock + alloc in the mixin; KV commit settles entirely in
+    # resolve. No worker pre-claims the bonus (not in KV yet).
     (*_MIXIN, "decode_batch_idx"): 1,
     (*_MIXIN, "evict"): 1,
     (*_MIXIN, "kv_allocated_len"): 1,
-    # Resolve commits the full accepted run (drafts + bonus) uniformly for all
-    # workers; finished/retracted reqs settle nothing. Spec grammar truncation
-    # commits only the retained (pre-termination) length here, so the dropped
-    # suffix is never over-committed (no later rollback).
+    # Resolve commits the full accepted run uniformly for all workers;
+    # finished/retracted settle nothing. Grammar truncation commits only the
+    # retained prefix, so the dropped suffix is never over-committed.
     (*_RESOLVE, "kv_committed_len"): 1,
     (*_RESOLVE, "spec_verify_ct"): 1,
     (

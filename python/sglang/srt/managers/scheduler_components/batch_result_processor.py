@@ -559,9 +559,7 @@ class SchedulerBatchResultProcessor:
             accept_tokens = next_token_ids[i * stride : i * stride + accept_lens[i]]
 
             if req.is_retracted or req.finished():
-                # retracted: reset_for_retract() already zeroed KV. finished: nothing
-                # to settle -- prepare_for_decode does not pre-claim the bonus (it is
-                # not in KV yet), so kv_committed_len already holds the committed prefix.
+                # retracted: KV already zeroed. finished: no bonus pre-claim to release.
                 pass
             else:
                 if req.grammar is not None:
@@ -572,8 +570,7 @@ class SchedulerBatchResultProcessor:
                     accept_tokens = self._accept_grammar_tokens(req, accept_tokens)
 
                 num_accept_tokens = len(accept_tokens)
-                # Commit the full accepted run (drafts + bonus). No worker pre-claims
-                # the bonus in prepare_for_decode, so the count is uniform.
+                # Commit the full accepted run (drafts + bonus); no worker pre-claims it.
                 req.kv_committed_len += num_accept_tokens
                 req.spec_verify_ct += 1
 

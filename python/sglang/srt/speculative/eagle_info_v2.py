@@ -49,10 +49,8 @@ class EagleDraftInputV2Mixin:
             cur = r.kv_allocated_len
             # max(cur, ...) clamps so adaptive downswitch (smaller alloc_len_per_decode)
             # cannot make nxt < cur and corrupt allocator state. kv_committed_len is the
-            # truly-committed length: the bonus token isn't in KV yet (resolve commits the
-            # full accepted run, incl. bonus), so it lags batch.seq_lens by ~1 verify in
-            # overlap mode and we react to adaptive switches one batch later than a
-            # seq_lens-based baseline; the 2*alloc over-allocation buffer absorbs that lag.
+            # committed prefix (bonus not yet in KV; resolve commits it), so it lags
+            # batch.seq_lens by ~1 verify in overlap; the 2*alloc buffer absorbs the lag.
             nxt = max(cur, r.kv_committed_len + double_alloc)
             cur_kv_lens[i] = cur
             nxt_kv_lens[i] = nxt
