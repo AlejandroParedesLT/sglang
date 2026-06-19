@@ -1296,7 +1296,6 @@ class DecodePreallocQueue(DecodeHiCachePreallocMixin):
         fill_len = len(req.origin_input_ids) + max(len(req.output_ids) - 1, 0)
         req.kv_allocated_len = fill_len
         req.kv_committed_len = fill_len
-        req.kv_resolved_len = fill_len
 
         if prefix_len > 0:
             self.req_to_token_pool.write(

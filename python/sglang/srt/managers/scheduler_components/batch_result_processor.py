@@ -558,12 +558,11 @@ class SchedulerBatchResultProcessor:
         for i, req in enumerate(batch.reqs):
             accept_tokens = next_token_ids[i * stride : i * stride + accept_lens[i]]
 
-            if req.is_retracted:
-                # reset_for_retract() already zeroes committed/resolved/allocated KV.
+            if req.is_retracted or req.finished():
+                # retracted: reset_for_retract() already zeroed KV. finished: nothing
+                # to settle -- prepare_for_decode does not pre-claim the bonus (it is
+                # not in KV yet), so kv_committed_len already holds the committed prefix.
                 pass
-            elif req.finished():
-                # prepare_for_decode pre-claimed the bonus slot; release it.
-                req.kv_committed_len -= 1
             else:
                 if req.grammar is not None:
                     # Stop accepting once the grammar terminates, so the
@@ -573,11 +572,9 @@ class SchedulerBatchResultProcessor:
                     accept_tokens = self._accept_grammar_tokens(req, accept_tokens)
 
                 num_accept_tokens = len(accept_tokens)
-                # prepare_for_decode pre-claimed the bonus slot; commit the rest.
-                req.kv_committed_len += num_accept_tokens - 1
-                # kv_resolved_len is the truly-committed length (no pre-claim) that
-                # DFLASH reads as its attention seq_len.
-                req.kv_resolved_len += num_accept_tokens
+                # Commit the full accepted run (drafts + bonus). No worker pre-claims
+                # the bonus in prepare_for_decode, so the count is uniform.
+                req.kv_committed_len += num_accept_tokens
                 req.spec_verify_ct += 1
 
                 num_correct_drafts = result.num_correct_drafts_per_req_cpu[i]

@@ -175,11 +175,7 @@ class DFlashDraftInputV2(SpecInput):
         uniform_top_k_value = None
         uniform_top_k = True
         for i, req in enumerate(batch.reqs):
-            # Read the truly-committed length (no bonus pre-claim) as the attention
-            # seq_len. kv_committed_len now carries the pre-claim and would over-read
-            # by one KV slot. planning_len/reserved_len below derive from this too,
-            # so all three lengths come from the same source.
-            committed_len = int(req.kv_resolved_len)
+            committed_len = int(req.kv_committed_len)
             if cur_allocated_seq_lens_cpu is not None and i < len(
                 cur_allocated_seq_lens_cpu
             ):
@@ -200,11 +196,6 @@ class DFlashDraftInputV2(SpecInput):
             planning_seq_lens_sum += planning_len
             reserved_seq_lens_sum += reserved_len
             num_needed_tokens += reserved_len - cur_alloc_len
-
-            # Pre-claim the bonus slot like normal decode / EAGLE
-            # (eagle_info_v2.py); resolve subtracts 1. The attention seq_len above
-            # reads kv_resolved_len, so this pre-claim does not perturb it.
-            req.kv_committed_len += 1
 
             if top_k > max_top_k:
                 max_top_k = top_k

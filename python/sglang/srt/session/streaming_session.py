@@ -45,7 +45,6 @@ class SessionSlot:
     # KV pool state (None means no KV is currently held by this slot)
     req_pool_idx: Optional[int] = None
     kv_committed_len: int = 0
-    kv_resolved_len: int = 0
     kv_allocated_len: int = 0
 
     # First req's radix tree node (for dec_lock_ref on session close)
@@ -72,7 +71,6 @@ class SessionSlot:
         """Save KV state from a finishing request into this slot."""
         self.req_pool_idx = req.req_pool_idx
         self.kv_committed_len = req.kv_committed_len
-        self.kv_resolved_len = req.kv_resolved_len
         self.kv_allocated_len = req.kv_allocated_len
         self.swa_evicted_seqlen = req.swa_evicted_seqlen
 
@@ -106,7 +104,6 @@ class SessionSlot:
         """Restore KV state from this slot into an incoming request."""
         req.req_pool_idx = self.req_pool_idx
         req.kv_committed_len = self.kv_committed_len
-        req.kv_resolved_len = self.kv_resolved_len
         req.kv_allocated_len = self.kv_allocated_len
         req.swa_evicted_seqlen = self.swa_evicted_seqlen
         req.swa_uuid_for_lock = self.swa_uuid_for_lock
@@ -524,11 +521,9 @@ class StreamingSession(BasePrefixCache):
         self._free_kv_aligned(slot.req_pool_idx, prefix_len, slot.kv_allocated_len)
         slot.kv_allocated_len = prefix_len
         slot.kv_committed_len = min(slot.kv_committed_len, prefix_len)
-        slot.kv_resolved_len = min(slot.kv_resolved_len, prefix_len)
         slot.swa_evicted_seqlen = min(slot.swa_evicted_seqlen, prefix_len)
         req.kv_allocated_len = prefix_len
         req.kv_committed_len = min(req.kv_committed_len, prefix_len)
-        req.kv_resolved_len = min(req.kv_resolved_len, prefix_len)
         req.swa_evicted_seqlen = min(req.swa_evicted_seqlen, prefix_len)
 
     def _trim_overshoot(self, req: Req, finished_len: int) -> None:
@@ -541,7 +536,6 @@ class StreamingSession(BasePrefixCache):
         self._free_kv_aligned(req.req_pool_idx, target, req.kv_allocated_len)
         req.kv_allocated_len = min(req.kv_allocated_len, target)
         req.kv_committed_len = min(req.kv_committed_len, target)
-        req.kv_resolved_len = min(req.kv_resolved_len, target)
         req.swa_evicted_seqlen = min(req.swa_evicted_seqlen, target)
         req.output_ids = req.output_ids[:finished_len]
 

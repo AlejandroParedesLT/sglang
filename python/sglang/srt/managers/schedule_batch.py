@@ -735,11 +735,6 @@ class Req(ReqDllmMixin):
 
         # For req-level memory management
         self.kv_committed_len = 0
-        # Truly-committed KV length, excluding the bonus slot pre-claimed in
-        # prepare_for_decode. DFLASH reads this as its attention seq_len; it lags
-        # kv_committed_len by the outstanding pre-claim under overlap scheduling.
-        # EAGLE keeps a separate seq_len source and ignores it.
-        self.kv_resolved_len = 0
         self.kv_allocated_len = 0
         self.kv_committed_freed = False
         self.kv_overallocated_freed = False
@@ -1468,7 +1463,6 @@ class Req(ReqDllmMixin):
         self.already_computed = 0
         self.kv_allocated_len = 0
         self.kv_committed_len = 0
-        self.kv_resolved_len = 0
         self.kv_committed_freed = False
         self.kv_overallocated_freed = False
         self.swa_evicted_seqlen = 0
@@ -2067,7 +2061,6 @@ class ScheduleBatch(ScheduleBatchDisaggregationDecodeMixin):
 
             # update req-level memory management fields
             req.kv_committed_len = seq_len
-            req.kv_resolved_len = seq_len
             req.kv_allocated_len = seq_len
 
             # If input_embeds are available, store them

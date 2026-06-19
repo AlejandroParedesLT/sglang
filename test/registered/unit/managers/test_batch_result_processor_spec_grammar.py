@@ -109,11 +109,9 @@ class TestSpecV2GrammarTruncation(CustomTestCase):
         predict_tokens = proc._resolve_spec_v2_tokens(result, _FakeBatch([req]))
 
         self.assertEqual(predict_tokens, [[101, 102]])
-        # Commits (retained - 1): prepare_for_decode pre-claimed the bonus slot,
-        # and the dropped suffix is never committed.
-        self.assertEqual(req.kv_committed_len, 2 - 1)
-        # kv_resolved_len tracks the full retained run (no pre-claim).
-        self.assertEqual(req.kv_resolved_len, 2)
+        # Commits the retained run (no pre-claim); the dropped suffix past the
+        # grammar terminator is never committed.
+        self.assertEqual(req.kv_committed_len, 2)
 
     def test_resolve_keeps_all_when_grammar_not_terminated(self):
         req = _make_req(terminate_after=99)
@@ -123,12 +121,11 @@ class TestSpecV2GrammarTruncation(CustomTestCase):
         predict_tokens = proc._resolve_spec_v2_tokens(result, _FakeBatch([req]))
 
         self.assertEqual(predict_tokens, [[201, 202, 203]])
-        self.assertEqual(req.kv_committed_len, 3 - 1)
-        self.assertEqual(req.kv_resolved_len, 3)
+        self.assertEqual(req.kv_committed_len, 3)
 
     def test_resolve_dflash_matches_eagle(self):
-        # The is_dflash() fork is gone: DFLASH now pre-claims the bonus slot in
-        # prepare_for_decode like EAGLE, so resolve commits identically.
+        # The is_dflash() fork is gone: no worker pre-claims the bonus, so resolve
+        # commits the full accepted run identically for EAGLE and DFLASH.
         req = _make_req(terminate_after=99)
         proc = _make_processor()
         result = _make_result(4, [3], [201, 202, 203, 0])
@@ -138,8 +135,7 @@ class TestSpecV2GrammarTruncation(CustomTestCase):
         )
 
         self.assertEqual(predict_tokens, [[201, 202, 203]])
-        self.assertEqual(req.kv_committed_len, 3 - 1)
-        self.assertEqual(req.kv_resolved_len, 3)
+        self.assertEqual(req.kv_committed_len, 3)
 
 
 if __name__ == "__main__":
