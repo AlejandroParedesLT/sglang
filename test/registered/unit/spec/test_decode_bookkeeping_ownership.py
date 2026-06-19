@@ -1,7 +1,7 @@
 """Ownership contract for per-request bookkeeping clocks.
 
 Per-request accounting state (`decode_batch_idx` / `extend_batch_idx` iter
-clocks, `kv_committed_len` / `kv_allocated_len` KV watermarks,
+clocks, `kv_committed_len` / `kv_resolved_len` / `kv_allocated_len` KV watermarks,
 `spec_verify_ct`, and the `maybe_evict_swa()` call) must only be advanced by
 the reviewed owner sites in _OWNER_SITES; spec-v2 draft workers must not
 repeat any of them (the scheduler-driven mixin / resolve path already does).
@@ -30,6 +30,7 @@ _TRACKED_ATTRS = (
     "decode_batch_idx",
     "extend_batch_idx",
     "kv_committed_len",
+    "kv_resolved_len",
     "kv_allocated_len",
     "spec_verify_ct",
 )
@@ -52,6 +53,7 @@ _OWNER_SITES = {
     (_SB, "ScheduleBatch.prepare_for_decode", "kv_allocated_len"): 1,
     (_SB, "ScheduleBatch.prepare_for_extend", "extend_batch_idx"): 1,
     (_SB, "ScheduleBatch.prepare_for_extend", "kv_committed_len"): 1,
+    (_SB, "ScheduleBatch.prepare_for_extend", "kv_resolved_len"): 1,
     (_SB, "ScheduleBatch.prepare_for_extend", "kv_allocated_len"): 1,
     ("mem_cache/common.py", "alloc_for_extend", "evict"): 1,
     ("mem_cache/common.py", "alloc_for_decode", "evict"): 1,
@@ -60,12 +62,23 @@ _OWNER_SITES = {
     (*_MIXIN, "evict"): 1,
     (*_MIXIN, "kv_committed_len"): 1,
     (*_MIXIN, "kv_allocated_len"): 1,
-    # 3rd resolve mutation: DFLASH settles its full commit_lens here (no
-    # pre-claim in prepare_for_decode, unlike the EAGLE mixin).
-    # Spec grammar truncation commits only the retained (pre-termination) length
-    # here, so the dropped suffix is never over-committed (no later rollback).
-    (*_RESOLVE, "kv_committed_len"): 3,
+    # Resolve settles KV: finished releases the pre-claimed bonus (-1), running
+    # commits num_accept-1 (the bonus is pre-claimed in prepare_for_decode for all
+    # workers, incl. DFLASH). Spec grammar truncation commits only the retained
+    # (pre-termination) length here, so the dropped suffix is never over-committed
+    # (no later rollback).
+    (*_RESOLVE, "kv_committed_len"): 2,
+    # kv_resolved_len (truly-committed length, no pre-claim) advances here by the
+    # full accepted run; DFLASH reads it as its attention seq_len.
+    (*_RESOLVE, "kv_resolved_len"): 1,
     (*_RESOLVE, "spec_verify_ct"): 1,
+    # DFLASH pre-claims the bonus slot here (like the EAGLE mixin / normal decode);
+    # resolve subtracts 1.
+    (
+        "speculative/dflash_info_v2.py",
+        "DFlashDraftInputV2.prepare_for_decode",
+        "kv_committed_len",
+    ): 1,
     (
         "speculative/dflash_info_v2.py",
         "DFlashDraftInputV2.prepare_for_decode",
@@ -80,16 +93,25 @@ _OWNER_SITES = {
     (
         "disaggregation/decode.py",
         "DecodePreallocQueue._pre_alloc",
+        "kv_resolved_len",
+    ): 1,
+    (
+        "disaggregation/decode.py",
+        "DecodePreallocQueue._pre_alloc",
         "kv_allocated_len",
     ): 1,
     # streaming session slot save/restore and tail trimming
     (_SS, "SessionSlot.save_from_req", "kv_committed_len"): 1,
+    (_SS, "SessionSlot.save_from_req", "kv_resolved_len"): 1,
     (_SS, "SessionSlot.save_from_req", "kv_allocated_len"): 1,
     (_SS, "SessionSlot.restore_to_req", "kv_committed_len"): 1,
+    (_SS, "SessionSlot.restore_to_req", "kv_resolved_len"): 1,
     (_SS, "SessionSlot.restore_to_req", "kv_allocated_len"): 1,
     (_SS, "StreamingSession._free_tail", "kv_committed_len"): 2,
+    (_SS, "StreamingSession._free_tail", "kv_resolved_len"): 2,
     (_SS, "StreamingSession._free_tail", "kv_allocated_len"): 2,
     (_SS, "StreamingSession._trim_overshoot", "kv_committed_len"): 1,
+    (_SS, "StreamingSession._trim_overshoot", "kv_resolved_len"): 1,
     (_SS, "StreamingSession._trim_overshoot", "kv_allocated_len"): 1,
     (_SS, "StreamingSession.try_cache_finished_req", "kv_allocated_len"): 1,
 }

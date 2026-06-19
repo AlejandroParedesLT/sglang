@@ -559,12 +559,11 @@ class SchedulerBatchResultProcessor:
             accept_tokens = next_token_ids[i * stride : i * stride + accept_lens[i]]
 
             if req.is_retracted:
-                # reset_for_retract() already zeroes committed/allocated KV.
+                # reset_for_retract() already zeroes committed/resolved/allocated KV.
                 pass
             elif req.finished():
-                if not batch.spec_algorithm.is_dflash():
-                    # EAGLE prepare_for_decode pre-claimed the bonus slot.
-                    req.kv_committed_len -= 1
+                # prepare_for_decode pre-claimed the bonus slot; release it.
+                req.kv_committed_len -= 1
             else:
                 if req.grammar is not None:
                     # Stop accepting once the grammar terminates, so the
@@ -574,12 +573,11 @@ class SchedulerBatchResultProcessor:
                     accept_tokens = self._accept_grammar_tokens(req, accept_tokens)
 
                 num_accept_tokens = len(accept_tokens)
-                if batch.spec_algorithm.is_dflash():
-                    # DFLASH materialized accepted draft tokens plus the bonus token.
-                    req.kv_committed_len += num_accept_tokens
-                else:
-                    # EAGLE prepare_for_decode pre-claimed the bonus slot.
-                    req.kv_committed_len += num_accept_tokens - 1
+                # prepare_for_decode pre-claimed the bonus slot; commit the rest.
+                req.kv_committed_len += num_accept_tokens - 1
+                # kv_resolved_len is the truly-committed length (no pre-claim) that
+                # DFLASH reads as its attention seq_len.
+                req.kv_resolved_len += num_accept_tokens
                 req.spec_verify_ct += 1
 
                 num_correct_drafts = result.num_correct_drafts_per_req_cpu[i]
